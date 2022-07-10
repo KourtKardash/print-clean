@@ -5,9 +5,11 @@ from pathlib import Path
 from numpy import uint8, vectorize
 from skimage.filters import threshold_local
 from skimage.io import imread, imsave
+from skimage.restoration import denoise_tv_chambolle
 
 BLOCK_SIZE = 99
 OFFSET = 10 / 255
+DENOISE_WEIGHT = 0.03
 STRENGTH_THRESHOLD = 0.02
 OUTPUT_SUFFIX = '-cleaned'
 OUTPUT_EXTENSION = 'png'
@@ -33,5 +35,6 @@ if not path.is_file():
     raise Exception(f'{path} is not a file')
 
 image = imread(path, as_gray=True)
+image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
 threshold = threshold_local(image, BLOCK_SIZE, offset=OFFSET)
 imsave(get_output_path(path), (vectorize(compute_strength)(image - threshold) * 255).astype(uint8))
