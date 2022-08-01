@@ -13,7 +13,7 @@ After:
 Usage:
 
 ```
-python clean.py path-to-image [--lang code1 code2 ...] [--level value]
+python clean.py path-to-image [path-to-another-image ...] [--lang code1 code2 ...] [--level value]
 ```
 
 You may provide your document’s language(s) with the `--lang` parameter, which may help fix the photo’s perspective. Currently, the script can only perform simple rotations.

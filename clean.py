@@ -21,7 +21,7 @@ OUTPUT_SUFFIX = '-cleaned'
 OUTPUT_EXTENSION = 'png'
 
 args = ArgumentParser()
-args.add_argument('image', help='Path to the image file.')
+args.add_argument('images', nargs='+', help='Path to the image file(s).')
 args.add_argument(
     '--lang',
     nargs='+',
@@ -37,15 +37,15 @@ args.add_argument(
 )
 args = args.parse_args()
 
-path = Path(args.image)
+paths = list(map(Path, args.images))
 languages: Optional[list[str]] = args.lang
 level: int = args.level
 
-if not path.exists():
-    exit(f'{path} does not exist')
-
-if not path.is_file():
-    exit(f'{path} is not a file')
+for path in paths:
+    if not path.exists():
+        exit(f'{path} does not exist')
+    if not path.is_file():
+        exit(f'{path} is not a file')
 
 if not 0 <= level <= MAX_LEVEL:
     exit(f'Level is not between 0 and {MAX_LEVEL}')
@@ -60,13 +60,17 @@ def get_output_path(input_path: Path) -> Path:
     return input_path.parent / f'{input_path.stem}{OUTPUT_SUFFIX}.{OUTPUT_EXTENSION}'
 
 
-image = imread(path, as_gray=True)
-image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
-threshold = threshold_local(image, BLOCK_SIZE, offset=level / MAX_LEVEL)
-image = vectorize(compute_strength)(image - threshold)
-if languages:
-    try:
-        image = fix_perspective(image, languages)
-    except ValueError as error:
-        exit(error.args)
-imsave(get_output_path(path), float_to_uint8(image))
+for index, path in enumerate(paths):
+    print(f'Processing {path} ({index + 1} of {len(paths)})...')
+    image = imread(path, as_gray=True)
+    image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
+    threshold = threshold_local(image, BLOCK_SIZE, offset=level / MAX_LEVEL)
+    image = vectorize(compute_strength)(image - threshold)
+    if languages:
+        try:
+            image = fix_perspective(image, languages)
+        except ValueError as error:
+            exit(error.args)
+    imsave(get_output_path(path), float_to_uint8(image))
+
+print('Done')
