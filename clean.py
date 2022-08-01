@@ -13,7 +13,8 @@ from inc.perspective import fix_perspective
 from inc.utils import float_to_uint8
 
 BLOCK_SIZE = 99
-OFFSET = 10 / 255
+DEFAULT_LEVEL = 10
+MAX_LEVEL = 255
 DENOISE_WEIGHT = 0.03
 STRENGTH_THRESHOLD = 0.02
 OUTPUT_SUFFIX = '-cleaned'
@@ -27,16 +28,27 @@ args.add_argument(
     help='Language(s) of the document. This is used to fix perspective of the photo. '
          'Use language codes from https://tesseract-ocr.github.io/tessdoc/Data-Files-in-different-versions.html.',
 )
+args.add_argument(
+    '--level',
+    nargs='?',
+    default=DEFAULT_LEVEL,
+    type=int,
+    help=f'The cleanup threshold, a value between 0 and {MAX_LEVEL} (larger is more aggressive).',
+)
 args = args.parse_args()
 
 path = Path(args.image)
 languages: Optional[list[str]] = args.lang
+level: int = args.level
 
 if not path.exists():
     exit(f'{path} does not exist')
 
 if not path.is_file():
     exit(f'{path} is not a file')
+
+if not 0 <= level <= MAX_LEVEL:
+    exit(f'Level is not between 0 and {MAX_LEVEL}')
 
 
 def compute_strength(diff: float) -> float:
@@ -50,7 +62,7 @@ def get_output_path(input_path: Path) -> Path:
 
 image = imread(path, as_gray=True)
 image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
-threshold = threshold_local(image, BLOCK_SIZE, offset=OFFSET)
+threshold = threshold_local(image, BLOCK_SIZE, offset=level / MAX_LEVEL)
 image = vectorize(compute_strength)(image - threshold)
 if languages:
     try:
