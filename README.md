@@ -14,8 +14,14 @@ After:
 
 Install [Python](https://www.python.org/downloads/) 3.9 or higher, then run:
 
-```bash
+```
 pip install printclean
+```
+
+or
+
+```
+pip3 install printclean
 ```
 
 ## Usage
