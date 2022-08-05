@@ -7,7 +7,7 @@ from pytesseract import get_languages, image_to_data, Output
 from skimage.color import gray2rgb
 from skimage.transform import rotate
 
-from inc.utils import float_to_uint8
+from .utils import float_to_uint8
 
 __all__ = ['fix_perspective']
 
