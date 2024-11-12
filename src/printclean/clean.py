@@ -59,5 +59,3 @@ def run() -> None:
                 exit(error.args)
         cv2.imwrite(get_output_path(path), image)
     print('Done')
-
-run()
