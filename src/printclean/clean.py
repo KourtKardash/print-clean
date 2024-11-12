@@ -52,7 +52,6 @@ def run() -> None:
         blurred = cv2.GaussianBlur(image, (BLURRED_WND, BLURRED_WND), 0)
         shadow_removed = cv2.divide(image, blurred, scale=MAX_SCALE)
         image = adjust_gamma(shadow_removed , gamma=CONTRAST_PARAM)
-
         if languages:
             try:
                 image = fix_perspective(image, languages)
