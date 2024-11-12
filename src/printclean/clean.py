@@ -9,6 +9,8 @@ import numpy as np
 from .perspective import fix_perspective
 
 BLURRED_WND = 21
+CONTRAST_PARAM = 0.3
+MAX_SCALE = 255
 DENOISE_WEIGHT = 0.03
 OUTPUT_SUFFIX = '-cleaned'
 OUTPUT_EXTENSION = 'png'
@@ -48,8 +50,8 @@ def run() -> None:
         image = cv2.imread(path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(image, (BLURRED_WND, BLURRED_WND), 0)
-        shadow_removed = cv2.divide(image, blurred, scale=255)
-        image = adjust_gamma(shadow_removed , gamma=0.3)
+        shadow_removed = cv2.divide(image, blurred, scale=MAX_SCALE)
+        image = adjust_gamma(shadow_removed , gamma=CONTRAST_PARAM)
 
         if languages:
             try:
