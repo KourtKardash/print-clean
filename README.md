@@ -4,11 +4,13 @@ This script helps prepare photographed documents for printing:
 
 Before:
 
-![before](https://github.com/danmysak/print-clean/raw/main/demo/demo.jpg)
+![before](https://github.com/danmysak/print-clean/raw/main/demo/demo_1.jpg)
+![before](https://github.com/danmysak/print-clean/raw/main/demo/demo_2.jpg)
 
 After:
 
-![after](https://github.com/danmysak/print-clean/raw/main/demo/demo-cleaned.png)
+![after](https://github.com/danmysak/print-clean/raw/main/demo/demo_1-cleaned-threshold.png)
+![after](https://github.com/danmysak/print-clean/raw/main/demo/demo_2-cleaned-gauss_blur.png)
 
 ## Installation
 
