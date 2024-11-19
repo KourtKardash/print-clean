@@ -6,6 +6,8 @@ from numpy.typing import NDArray
 from pytesseract import get_languages, image_to_data, Output
 from skimage.color import gray2rgb
 from skimage.transform import rotate
+import numpy as np
+from .utils import float_to_uint8
 
 __all__ = ['fix_perspective']
 
@@ -78,7 +80,7 @@ def fix_perspective(image: NDArray[NDArray[float]], languages: list[str]) -> NDA
             if code not in supported_languages:
                 raise ValueError(f'Language with the code "{code}" is not supported '
                                  f'by the Tesseract OCR engine or is not installed')
-    data = image_to_data(gray2rgb(image), lang=LANG_DELIMITER.join(languages), output_type=Output.DICT)
+    data = image_to_data(gray2rgb(float_to_uint8(image)), lang=LANG_DELIMITER.join(languages), output_type=Output.DICT)
     lines = extract_lines(data)
     slope = compute_average_slope(lines)
     return rotate(image, slope_to_degrees(slope), resize=True, cval=1) if slope is not None else image

@@ -29,7 +29,7 @@ OUTPUT_EXTENSION = 'png'
 
 def adjust_gamma(image: np.ndarray, gamma: float) -> np.ndarray:
     inv_gamma = 1.0 / gamma
-    table = np.array([(i / 255.0) ** inv_gamma * 255 for i in np.arange(0, 256)]).astype("uint8")
+    table = np.array([(i / 255.0) ** inv_gamma for i in np.arange(0, 256)])
     return cv2.LUT(image, table)
 
 
@@ -51,13 +51,12 @@ def gauss_blur_proccesing(image: np.ndarray) -> np.ndarray:
     for y in range(0, height, WINDOW_SIZE):
         for x in range(0, width, WINDOW_SIZE):
             window = image[y:y + WINDOW_SIZE, x:x + WINDOW_SIZE]
-                    
             mean_intensity = np.mean(window)
             std_intensity = np.std(window)
        
             threshold = mean_intensity - 0.5 * std_intensity
             binary_window = (window > threshold)            
-            image[y:y + WINDOW_SIZE, x:x + WINDOW_SIZE][binary_window] = MAX_LEVEL
+            image[y:y + WINDOW_SIZE, x:x + WINDOW_SIZE][binary_window] = 1
 
     return image
 
@@ -65,32 +64,34 @@ def gauss_blur_proccesing(image: np.ndarray) -> np.ndarray:
 def local_threshold_proccesing(image: np.ndarray, level: int) -> np.ndarray:
     image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
     threshold = threshold_local(image, BLOCK_SIZE, offset=level / MAX_LEVEL)
-    image = float_to_uint8(np.vectorize(compute_strength)(image - threshold))
+    image = np.vectorize(compute_strength)(image - threshold)
     return image
 
 
 def run() -> None:
-    parser = ArgumentParser()
-    parser.add_argument('images', nargs='+', help='Path to the image file(s).')
-    parser.add_argument(
+    parser = ArgumentParser(description="Image processing tool.")
+
+    parent_parser = ArgumentParser(add_help=False)
+    parent_parser.add_argument('images', nargs='+', help='Path to the image file(s).')
+    parent_parser.add_argument(
         '--lang',
-        #nargs='+',
+        nargs='+',
         help='Language(s) of the document. This is used to fix perspective of the photo. '
              'Use language codes from https://tesseract-ocr.github.io/tessdoc/Data-Files-in-different-versions.html.',
     )
 
     subparsers = parser.add_subparsers(dest='method', help="Image processing method.", required=True)
 
-    parser_threshold = subparsers.add_parser('threshold', help='Local threshold algorithm.')
+    parser_threshold = subparsers.add_parser('threshold', help='Local threshold algorithm.', parents=[parent_parser])
     parser_threshold.add_argument(
         '--level',
         nargs='?',
         type=int,
         default=DEFAULT_LEVEL,
-        help='The cleanup threshold, a value between 0 and {MAX_LEVEL} (larger is more aggressive).',
+        help=f'The cleanup threshold, a value between 0 and {MAX_LEVEL} (larger is more aggressive).',
     )
 
-    parser_gauss = subparsers.add_parser('gauss_blur', help='Algorithm based on gaussian blur.')
+    parser_gauss = subparsers.add_parser('gauss_blur', help='Algorithm based on gaussian blur.', parents=[parent_parser])
 
     args = parser.parse_args()
     paths = list(map(Path, args.images))
@@ -120,6 +121,6 @@ def run() -> None:
                 image = fix_perspective(image, languages)
             except ValueError as error:
                 exit(error.args)
-        cv2.imwrite(get_output_path(path, method), image)
+        cv2.imwrite(get_output_path(path, method), float_to_uint8(image))
 
     print('Done')
