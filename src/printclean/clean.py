@@ -6,12 +6,17 @@ from typing import Optional
 
 import cv2
 import numpy as np
-
+from numpy import uint8
+from numpy.typing import NDArray
 from skimage.filters import threshold_local
 from skimage.restoration import denoise_tv_chambolle
 
 from .perspective import fix_perspective
 from .utils import float_to_uint8
+
+LOCAL_THRESHOLD_METHOD = 'threshold'
+GAUSSIAN_BLUR_METHOD = 'gauss_blur'
+DEFAULT_METHOD = GAUSSIAN_BLUR_METHOD
 
 BLURRED_WND = 21
 CONTRAST_PARAM = 0.3
@@ -27,7 +32,17 @@ OUTPUT_SUFFIX = '-cleaned'
 OUTPUT_EXTENSION = 'png'
 
 
-def adjust_gamma(image: np.ndarray, gamma: float) -> np.ndarray:
+def get_output_path(input_path: Path, method: str) -> Path:
+    return input_path.parent / f'{input_path.stem}{OUTPUT_SUFFIX}-{method}.{OUTPUT_EXTENSION}'
+
+
+def local_threshold(image: NDArray[NDArray[uint8]], level: int) -> NDArray[NDArray[float]]:
+    image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
+    threshold = threshold_local(image, BLOCK_SIZE, offset=level / MAX_LEVEL)
+    return np.vectorize(compute_strength)(image - threshold)
+
+
+def adjust_gamma(image: NDArray[NDArray[uint8]], gamma: float) -> NDArray[NDArray[float]]:
     inv_gamma = 1.0 / gamma
     table = np.array([(i / 255.0) ** inv_gamma for i in np.arange(0, 256)])
     return cv2.LUT(image, table)
@@ -38,11 +53,7 @@ def compute_strength(diff: float) -> float:
     return 0.5 + copysign(strength, diff)
 
 
-def get_output_path(input_path: Path, method: str) -> Path:
-    return input_path.parent / f'{input_path.stem}{OUTPUT_SUFFIX}-{method}.{OUTPUT_EXTENSION}'
-
-
-def gauss_blur_proccesing(image: np.ndarray) -> np.ndarray:
+def gaussian_blur(image: NDArray[NDArray[uint8]]) -> NDArray[NDArray[float]]:
     blurred = cv2.GaussianBlur(image, (BLURRED_WND, BLURRED_WND), 0)
     shadow_removed = cv2.divide(image, blurred, scale=MAX_LEVEL)
     image = adjust_gamma(shadow_removed, gamma=CONTRAST_PARAM)
@@ -61,39 +72,30 @@ def gauss_blur_proccesing(image: np.ndarray) -> np.ndarray:
     return image
 
 
-def local_threshold_proccesing(image: np.ndarray, level: int) -> np.ndarray:
-    image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
-    threshold = threshold_local(image, BLOCK_SIZE, offset=level / MAX_LEVEL)
-    image = np.vectorize(compute_strength)(image - threshold)
-    return image
-
-
 def run() -> None:
-    parser = ArgumentParser(description="Image processing tool.")
-
-    parent_parser = ArgumentParser(add_help=False)
-    parent_parser.add_argument('images', nargs='+', help='Path to the image file(s).')
-    parent_parser.add_argument(
+    args = ArgumentParser()
+    args.add_argument('images', nargs='+', help='Path to the image file(s).')
+    args.add_argument(
+        '--method',
+        choices=[LOCAL_THRESHOLD_METHOD, GAUSSIAN_BLUR_METHOD],
+        default=DEFAULT_METHOD,
+        help='The cleanup method to use.',
+    )
+    args.add_argument(
+        '--level',
+        nargs='?',
+        default=DEFAULT_LEVEL,
+        type=int,
+        help=f'The cleanup threshold, a value between 0 and {MAX_LEVEL} (larger is more aggressive).',
+    )
+    args.add_argument(
         '--lang',
         nargs='+',
         help='Language(s) of the document. This is used to fix perspective of the photo. '
              'Use language codes from https://tesseract-ocr.github.io/tessdoc/Data-Files-in-different-versions.html.',
     )
+    args = args.parse_args()
 
-    subparsers = parser.add_subparsers(dest='method', help="Image processing method.", required=True)
-
-    parser_threshold = subparsers.add_parser('threshold', help='Local threshold algorithm.', parents=[parent_parser])
-    parser_threshold.add_argument(
-        '--level',
-        nargs='?',
-        type=int,
-        default=DEFAULT_LEVEL,
-        help=f'The cleanup threshold, a value between 0 and {MAX_LEVEL} (larger is more aggressive).',
-    )
-
-    parser_gauss = subparsers.add_parser('gauss_blur', help='Algorithm based on gaussian blur.', parents=[parent_parser])
-
-    args = parser.parse_args()
     paths = list(map(Path, args.images))
     languages: Optional[list[str]] = args.lang
     method: str = args.method
@@ -106,21 +108,22 @@ def run() -> None:
 
     for index, path in enumerate(paths):
         print(f'Processing {path} ({index + 1} of {len(paths)})...')
-        image = cv2.imread(path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        if method == 'gauss_blur':
-            image = gauss_blur_proccesing(image)
-        else:
+        image = cv2.cvtColor(cv2.imread(str(path.resolve())), cv2.COLOR_BGR2GRAY)
+        if method == LOCAL_THRESHOLD_METHOD:
             level: int = args.level
             if not 0 <= level <= MAX_LEVEL:
                 exit(f'Level is not between 0 and {MAX_LEVEL}')
-            image = local_threshold_proccesing(image, level)
+            cleaned = local_threshold(image, level)
+        elif method == GAUSSIAN_BLUR_METHOD:
+            cleaned = gaussian_blur(image)
+        else:
+            raise NotImplementedError(f'Method {method} is not implemented')
 
         if languages:
             try:
-                image = fix_perspective(image, languages)
+                cleaned = fix_perspective(cleaned, languages)
             except ValueError as error:
                 exit(error.args)
-        cv2.imwrite(get_output_path(path, method), float_to_uint8(image))
+        cv2.imwrite(str(get_output_path(path, method).resolve()), float_to_uint8(cleaned))
 
     print('Done')

@@ -29,13 +29,17 @@ pip3 install printclean
 ## Usage
 
 ```
-printclean path-to-image [path-to-another-image ...] [--level value] [--lang code1 code2 ...]
+printclean <path-to-image> [<path-to-another-image> ...] [--method threshold|gauss_blur] [--level value] [--lang <code1> <code2> ...]
 ```
 
-You can optionally specify the cleanup’s threshold value with `--level`. The value must be an integer between 0 and 255, inclusive. Larger values produce images with fewer filled pixels. The default is 10.
+You can provide one or more paths to image files. The script will clean them up and save the results in the same directory.
 
-You may also provide your document’s language(s) with the `--lang` parameter, which may help fix the input image’s perspective. Currently, the script can only perform simple rotations.
+You can specify the cleanup method using the `--method` parameter. The available methods are `threshold` and `gauss_blur`, with the default being `gauss_blur`.
 
-You can find available languages and their codes [here](https://tesseract-ocr.github.io/tessdoc/Data-Files-in-different-versions.html). You might need to specifically install your required language for the Tesseract OCR engine ([Windows](https://stackoverflow.com/a/69958671/430083), [Ubuntu](https://askubuntu.com/a/798492/1064838), [Mac OS](https://stackoverflow.com/a/60595075/430083)).
+If the `--method` is set to `threshold`, you can optionally specify the threshold value for cleanup using the `--level` parameter. The value must be an integer between 0 and 255 (inclusive). Larger values produce images with fewer filled pixels. The default value is 10.
+
+Additionally, you may specify the language(s) of your document using the `--lang` parameter. This can help the script improve perspective correction for the input image. Note that the script currently supports only simple rotations for perspective correction.
+
+You can find the available languages and their corresponding codes [here](https://tesseract-ocr.github.io/tessdoc/Data-Files-in-different-versions.html). Depending on your system, you may need to install the required language files for the Tesseract OCR engine: ([Windows](https://stackoverflow.com/a/69958671/430083), [Ubuntu](https://askubuntu.com/a/798492/1064838), [Mac OS](https://stackoverflow.com/a/60595075/430083)).
 
 The output image will be saved as a PNG file with the suffix `-cleaned`.
