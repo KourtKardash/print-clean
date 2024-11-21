@@ -4,21 +4,48 @@ from pathlib import Path
 from sys import exit
 from typing import Optional
 
-from numpy import vectorize
+import cv2
+import numpy as np
+from numpy import uint8
+from numpy.typing import NDArray
 from skimage.filters import threshold_local
-from skimage.io import imread, imsave
 from skimage.restoration import denoise_tv_chambolle
 
 from .perspective import fix_perspective
 from .utils import float_to_uint8
+
+LOCAL_THRESHOLD_METHOD = 'threshold'
+GAUSSIAN_BLUR_METHOD = 'gauss_blur'
+DEFAULT_METHOD = GAUSSIAN_BLUR_METHOD
+
+BLURRED_WND = 21
+CONTRAST_PARAM = 0.3
+WINDOW_SIZE = 128
 
 BLOCK_SIZE = 99
 DEFAULT_LEVEL = 10
 MAX_LEVEL = 255
 DENOISE_WEIGHT = 0.03
 STRENGTH_THRESHOLD = 0.02
+
 OUTPUT_SUFFIX = '-cleaned'
 OUTPUT_EXTENSION = 'png'
+
+
+def get_output_path(input_path: Path, method: str) -> Path:
+    return input_path.parent / f'{input_path.stem}{OUTPUT_SUFFIX}-{method}.{OUTPUT_EXTENSION}'
+
+
+def local_threshold(image: NDArray[NDArray[uint8]], level: int) -> NDArray[NDArray[float]]:
+    image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
+    threshold = threshold_local(image, BLOCK_SIZE, offset=level / MAX_LEVEL)
+    return np.vectorize(compute_strength)(image - threshold)
+
+
+def adjust_gamma(image: NDArray[NDArray[uint8]], gamma: float) -> NDArray[NDArray[float]]:
+    inv_gamma = 1.0 / gamma
+    table = np.array([(i / 255.0) ** inv_gamma for i in np.arange(0, 256)])
+    return cv2.LUT(image, table)
 
 
 def compute_strength(diff: float) -> float:
@@ -26,19 +53,41 @@ def compute_strength(diff: float) -> float:
     return 0.5 + copysign(strength, diff)
 
 
-def get_output_path(input_path: Path) -> Path:
-    return input_path.parent / f'{input_path.stem}{OUTPUT_SUFFIX}.{OUTPUT_EXTENSION}'
+def gaussian_blur(image: NDArray[NDArray[uint8]]) -> NDArray[NDArray[float]]:
+    blurred = cv2.GaussianBlur(image, (BLURRED_WND, BLURRED_WND), 0)
+    shadow_removed = cv2.divide(image, blurred, scale=MAX_LEVEL)
+    image = adjust_gamma(shadow_removed, gamma=CONTRAST_PARAM)
+
+    height, width = image.shape
+    for y in range(0, height, WINDOW_SIZE):
+        for x in range(0, width, WINDOW_SIZE):
+            window = image[y:y + WINDOW_SIZE, x:x + WINDOW_SIZE]
+            mean_intensity = np.mean(window)
+            std_intensity = np.std(window)
+       
+            threshold = mean_intensity - 0.5 * std_intensity
+            binary_window = (window > threshold)            
+            image[y:y + WINDOW_SIZE, x:x + WINDOW_SIZE][binary_window] = 1
+
+    return image
 
 
 def run() -> None:
     args = ArgumentParser()
     args.add_argument('images', nargs='+', help='Path to the image file(s).')
     args.add_argument(
+        '--method',
+        choices=[LOCAL_THRESHOLD_METHOD, GAUSSIAN_BLUR_METHOD],
+        default=DEFAULT_METHOD,
+        help='The cleanup method to use.',
+    )
+    args.add_argument(
         '--level',
         nargs='?',
         default=DEFAULT_LEVEL,
         type=int,
-        help=f'The cleanup threshold, a value between 0 and {MAX_LEVEL} (larger is more aggressive).',
+        help=f'The cleanup threshold, a value between 0 and {MAX_LEVEL} '
+             f'(larger is more aggressive; used only with "{LOCAL_THRESHOLD_METHOD}" method).',
     )
     args.add_argument(
         '--lang',
@@ -50,7 +99,7 @@ def run() -> None:
 
     paths = list(map(Path, args.images))
     languages: Optional[list[str]] = args.lang
-    level: int = args.level
+    method: str = args.method
 
     for path in paths:
         if not path.exists():
@@ -58,20 +107,24 @@ def run() -> None:
         if not path.is_file():
             exit(f'{path} is not a file')
 
-    if not 0 <= level <= MAX_LEVEL:
-        exit(f'Level is not between 0 and {MAX_LEVEL}')
-
     for index, path in enumerate(paths):
         print(f'Processing {path} ({index + 1} of {len(paths)})...')
-        image = imread(path, as_gray=True)
-        image = denoise_tv_chambolle(image, weight=DENOISE_WEIGHT)
-        threshold = threshold_local(image, BLOCK_SIZE, offset=level / MAX_LEVEL)
-        image = vectorize(compute_strength)(image - threshold)
+        image = cv2.cvtColor(cv2.imread(str(path.resolve())), cv2.COLOR_BGR2GRAY)
+        if method == LOCAL_THRESHOLD_METHOD:
+            level: int = args.level
+            if not 0 <= level <= MAX_LEVEL:
+                exit(f'Level is not between 0 and {MAX_LEVEL}')
+            cleaned = local_threshold(image, level)
+        elif method == GAUSSIAN_BLUR_METHOD:
+            cleaned = gaussian_blur(image)
+        else:
+            raise NotImplementedError(f'Method {method} is not implemented')
+
         if languages:
             try:
-                image = fix_perspective(image, languages)
+                cleaned = fix_perspective(cleaned, languages)
             except ValueError as error:
                 exit(error.args)
-        imsave(get_output_path(path), float_to_uint8(image))
+        cv2.imwrite(str(get_output_path(path, method).resolve()), float_to_uint8(cleaned))
 
     print('Done')
