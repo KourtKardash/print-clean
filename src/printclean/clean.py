@@ -86,7 +86,8 @@ def run() -> None:
         nargs='?',
         default=DEFAULT_LEVEL,
         type=int,
-        help=f'The cleanup threshold, a value between 0 and {MAX_LEVEL} (larger is more aggressive).',
+        help=f'The cleanup threshold, a value between 0 and {MAX_LEVEL} '
+             f'(larger is more aggressive; used only with "{LOCAL_THRESHOLD_METHOD}" method).',
     )
     args.add_argument(
         '--lang',
